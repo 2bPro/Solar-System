@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Solar System</title>
+	<style type="text/css">
+		body {
+			margin: 0;
+			color: black;
+		}
+
+		canvas {
+			width: 100%;
+			height: 100%;
+		}
+	</style>
+</head>
+<body>
+	<!--Three.js import and mouse controls-->
+	<script src="libraries/three.min.js"></script>
+	<script src="libraries/Projector.js"></script>
+	<script src="libraries/controls/three/TrackballControls.js"></script>
+	<script src="libraries/controls/three/MouseControls.js"></script>
+
+	<script type="text/javascript" src="libraries/xRingGeometry.js"></script>
+	<!--Leap-->
+	<script src="libraries/leap.min.js"></script>
+	<script src="libraries/controls/leap/LeapTrackballControls.js"></script>
+	<script src="libraries/controls/leap/LeapTwoHandControls.js"></script>
+	<!--Own scripts-->
+	<script src="planets.js"></script>
+
+	<script>
+		//Create scene
+		var scene = new THREE.Scene();
+		//Create camera
+		var camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+		//Set camera position on load
+		camera.position.z = 40;
+		//Initialise scene renderer 
+		var renderer = new THREE.WebGLRenderer();
+		renderer.setSize(window.innerWidth, window.innerHeight);
+
+		document.body.appendChild(renderer.domElement);
+
+		//Create planets list for later use with raycasting
+		var planets = [];
+
+		//Controls
+		//Initialise Leap controller
+		var controller = new Leap.Controller();
+		controller.connect(); 
+		//mouse controls
+		var controls = new THREE.TrackballControls(camera);
+		//Mode 0 = mouse controls, mode 1 = leap 
+		mode = 0;
+		//set the type of controls for testing purposes
+		controls.type = "mouse";
+		//Projector also to be used for raycasting
+		var projector = new THREE.Projector();
+		//Initialising mouse event listener
+		document.addEventListener('mousedown', onDocumentMouseDown, false);
+		//Initialising keyboard event listener
+		document.addEventListener('keydown', onDocumentKeyDown, false);
+
+		//Let it be light!
+		//Scene light
+		var light = new THREE.AmbientLight(0x888888);
+		scene.add(light);
+		//Light on focused object 
+		var light = new THREE.DirectionalLight(0xcccccc, 1);
+		light.position.set(5, 3, 5);
+		scene.add(light);
+
+		//Create stars 
+		var starsMesh = new SolarSystem(150, 60, 'images/galaxy_starfield.png'); //use class from planets.js
+		scene.add(starsMesh); //add mesh object to the scene
+
+		//------SOLAR SYSTEM------//
+
+		//Sun
+		var sunMesh = new Planet(10, 50, 'images/sunmap.jpg'); //create mesh 
+		scene.add(sunMesh);				 //add to scene
+
+		//Mercury
+		var mercuryMesh = new Planet(0.2, 30, 'images/mercurymap.jpg'); //create mesh 
+
+		mercuryMesh.material.bumpMap = THREE.ImageUtils.loadTexture('images/mercurybump.jpg'); //add more features to mesh material
+		mercuryMesh.material.bumpScale = 0.003;
+
+		mercuryMesh.userData = {URL:'mercury.html'}; //add a link to the mesh
+		scene.add(mercuryMesh);					 	 //add to Scene 
+		mercuryMesh.position.set(15, 0, 0);      	 //set position from sun
+		planets.push(mercuryMesh);               	 //add to planets list
+
+		//Venus
+		var venusMesh = new Planet(0.5, 40, 'images/venusmap.jpg');
+
+		venusMesh.material.bumpMap = THREE.ImageUtils.loadTexture('images/venusbump.jpg');
+		venusMesh.material.bumpScale = 0.003;
+
+		venusMesh.userData = {URL:'venus.html'};
+		scene.add(venusMesh);
+		venusMesh.position.set(20, 0, 0);
+		planets.push(venusMesh);
+
+		//EARTH
+		var earth = new Planet(0.8, 40, 'images/earthmap1k.jpg');
+
+		earth.material.bumpMap = THREE.ImageUtils.loadTexture('images/earthbump1k.jpg');
+		earth.material.bumpScale = 0.05;
+
+		earth.position.set(25, 0, 0);
+		scene.add(earth);
+
+		//Code used for trying orbiting around the Sun
+		/*var earthPivot = new THREE.Object3D();
+		sunMesh.add(earthPivot);
+		earthPivot.add(earthMesh);*/
+
+		//Earth's atmosphere 
+		var cloudsMesh = new Planet(0.82, 41, 'images/fair_clouds_4k.png');
+
+		cloudsMesh.material.transparent = true;
+
+		cloudsMesh.userData = {URL:'earth.html'};
+		scene.add(cloudsMesh);
+		cloudsMesh.position.set(25, 0, 0);
+		planets.push(cloudsMesh);
+
+		//Moon
+		var moonMesh = new Planet(0.3, 30, 'images/moonmap.jpg');
+
+		moonMesh.material.bumpMap = THREE.ImageUtils.loadTexture('images/moonbump1k.jpg');
+		moonMesh.material.bumpScale = 0.003;
+
+		scene.add(moonMesh);
+		moonMesh.position.set(27, 0.5, 0.5);
+
+		//Mars
+		var marsMesh = new Planet(0.82, 41, 'images/marsmap.jpg');
+
+		marsMesh.material.bumpMap = THREE.ImageUtils.loadTexture('images/marsbump.jpg'),
+		marsMesh.material.bumpScale = 0.05;
+
+		marsMesh.userData = {URL:'mars.html'};
+		scene.add(marsMesh);
+		marsMesh.position.set(30, 0, 0);
+		planets.push(marsMesh);
+
+		//Jupiter
+		var jupiterMesh = new Planet(5, 40, 'images/jupitermap.jpg');
+
+		jupiterMesh.userData = {URL:'jupiter.html'};
+		scene.add(jupiterMesh);
+		jupiterMesh.position.set(40, 0, 0);
+		planets.push(jupiterMesh);
+
+		//Saturn
+		var saturnMesh = new Planet(3, 40, 'images/saturnmap.jpg');
+
+		saturnMesh.userData = {URL:'saturn.html'};
+		scene.add(saturnMesh);
+		saturnMesh.position.set(55, 0, 0);
+		planets.push(saturnMesh);
+
+		var satRingsMesh = new Rings(3, 40, 'images/saturn-rings.png');
+
+		scene.add(satRingsMesh);					
+		satRingsMesh.position.set(55, 0, 0);		//Set rings on top of saturnMesh
+		satRingsMesh.rotation.x += 45*Math.PI/180;  //Incline rings to a 45 degrees angle
+
+		//Uranus
+		var uranusMesh = new Planet(2, 40, 'images/uranusmap.jpg');
+
+		uranusMesh.userData = {URL:'uranus.html'};
+		scene.add(uranusMesh);
+		uranusMesh.position.set(70, 0, 0);
+		planets.push(uranusMesh);
+
+		var urRingsMesh = new Rings(2, 50, 'images/uranus_rings.png');
+		scene.add(urRingsMesh);
+		urRingsMesh.position.set(70, 0, 0);
+		urRingsMesh.rotation.x += 45*Math.PI/180;
+
+		//Neptune
+		var neptuneMesh = new Planet(1.5, 40, 'images/neptunemap.jpg');
+
+		neptuneMesh.userData = {URL:'neptune.html'};
+		scene.add(neptuneMesh);
+		neptuneMesh.position.set(80, 0, 0);
+		planets.push(neptuneMesh);
+
+		//Pluto
+		var plutoMesh = new Planet(0.2, 30, 'images/plutomap.jpg');
+
+		plutoMesh.userData = {URL:'pluto.html'};
+		scene.add(plutoMesh);
+		plutoMesh.position.set(85, 0, 0);
+		planets.push(plutoMesh);
+
+		scene.updateMatrixWorld(true);
+		animate();
+
+		//Function that constantly renders the scene and the camera
+		function animate() {
+			requestAnimationFrame(animate);
+			//Set meshes speeds 
+			mercuryMesh.rotation.y += 0.00005;
+			venusMesh.rotation.y -= 0.00001; //negative speeds mean the mesh rotates in reverse direction
+
+			earth.rotation.y += 0.001;
+			cloudsMesh.rotation.y += 0.0015; 
+			moonMesh.rotation.y += 0.0002;
+
+			marsMesh.rotation.y += 0.001;
+			jupiterMesh.rotation.y += 0.005;
+			saturnMesh.rotation.y += 0.004;
+			satRingsMesh.rotation.y += 0.0045;
+			uranusMesh.rotation.y -= 0.002;
+			urRingsMesh.rotation.y += 0.0025;
+			neptuneMesh.rotation.y += 0.002;
+			plutoMesh.rotation.y -= 0.0005; 
+
+			/*console.log(controls.type);*/ //Used for testing purposes as seen in the given plan
+			//Update controls
+			controls.update(); 
+
+			renderer.render(scene, camera);
+		}
+
+		//Mouse down event
+		function onDocumentMouseDown(event){
+			event.preventDefault();
+
+			//Get the mouse click location
+			var mouse = new THREE.Vector3((event.clientX / window.innerWidth)*2 - 1, -(event.clientY / window.innerHeight)*2 + 1, 0.5);
+			//Project a ray from the current point the camera is looking at to the clicked point
+			projector.unprojectVector(mouse, camera);
+			var raycaster = new THREE.Raycaster(camera.position, mouse.sub(camera.position).normalize());
+			//If the ray intersects with anything in the planets list, open the specific mesh's url
+			var intersects = raycaster.intersectObjects(planets);
+			if (intersects.length > 0){
+				window.open(intersects[0].object.userData.URL);
+
+				//Structure used for jumping from focused point to clicked point in the same scene
+				/*position = new THREE.Vector3();
+				position.setFromMatrixPosition(intersects[0].object.matrixWorld);
+				controls.target = new THREE.Vector3(position.x, position.y, position.z);*/
+			}
+		}
+
+		//Key down event
+		function onDocumentKeyDown(event){
+			var keyCode = event.which;
+
+			//Get camera direction to start new control looking in the same direction 
+			var prevCamera = camera;
+
+			camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+			camera.position.copy(prevCamera.position);
+			camera.rotation.copy(prevCamera.rotation);
+
+			//If the key pressed is SPACE
+			if(keyCode == 32){
+				switch(mode){
+					case 0:
+						//If controller mode is 0 = mouse, change to leap controls  
+						controls = new THREE.LeapTrackballControls(camera, controller);
+
+						controls.rotationSpeed = 10;
+						controls.maxZoom = 20000;
+
+						controls.type = "leap";
+						mode = 1;						
+					break;
+					case 1:
+						//If controller mode is 1 = leap, change to mouse motion
+						controls = new THREE.TrackballControls(camera);
+
+						controls.type = "mouse";
+						mode = 0;
+					break;
+				}
+			}
+
+			animate();
+		}
+		
+	</script>
+</body>
+</html>
